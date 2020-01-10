@@ -12,7 +12,10 @@ github_checkout.Command("snapshot_container/.git", None,
                                     "git clone https://github.com/Kubiyak/snapshot_container")
 github_checkout.Command("magic_get/.git", None, "git clone https://github.com/apolukhin/magic_get")
 github_checkout.Command("metal/.git", None, "git clone https://github.com/brunocodutra/metal")
-Repository("snapshot_container")
-Repository("magic_get/include/boost")
-Repository("metal/include")
 
+
+example_env = Environment(CXX="g++-8", CXXFLAGS="--std=c++17 -g", CPPPATH=["."])
+example = example_env.Program("example", ["meta_example.cpp"])
+Repository("snapshot_container")
+Repository("magic_get/include")
+Repository("metal/include")
