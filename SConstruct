@@ -15,7 +15,7 @@ github_checkout.Command("metal/.git", None, "git clone https://github.com/brunoc
 
 
 example_env = Environment(CXX="g++-8", CXXFLAGS="--std=c++17 -g", CPPPATH=["."])
-example = example_env.Program("example", ["meta_example.cpp"])
+example = example_env.Program("example", ["meta_example2.cpp"])
 Repository("snapshot_container")
 Repository("magic_get/include")
 Repository("metal/include")
