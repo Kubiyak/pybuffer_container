@@ -144,8 +144,9 @@ int main()
     auto result = realize_tuple(m1());
 
     // Now the last bit is to turn that tuple into a string
-    // https://stackoverflow.com/questions/23436406/converting-tuple-to-string
-
+    // See this stackoverflow post:
+    // https://stackoverflow.com/questions/1198260/how-can-you-iterate-over-the-elements-of-an-stdtuple
+    // TODO: Figure out what exactly this is doing.
     std::string py_struct_format;
     std::apply([&py_struct_format](auto&&... args) {(py_struct_format += extract_value(args)), ...);}, result);
 
