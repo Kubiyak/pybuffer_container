@@ -43,34 +43,13 @@ template <typename T>
 struct tuple_element
 {
     using value = map_to_struct_code<T>;
-    static constexpr bool array = false;
 };
 
 
 template <typename T>
 struct tuple_element<T*>
 {
-
-    using value = metal::number<'p'>;
-    static constexpr bool array = false;
-};
-
-// Just supports single dim for now. Todo: Generalize to more dimensions
-template <typename T, size_t N>
-struct tuple_element<T[N]>
-{
-    using value = map_to_struct_code<T>;
-    static constexpr bool array = true;
-    static constexpr size_t length = N;
-};
-
-
-template <typename T, size_t N>
-struct tuple_element<T*[N]>
-{
-    using value = metal::number<'p'>;
-    static constexpr bool array = true;
-    static constexpr size_t length = N;
+    using value = metal::number<'p'>;   
 };
 
 
@@ -88,48 +67,19 @@ auto extract_tuple_elements(T<Args...> prototype)
 }
 
 
-template <typename T, bool = T::array>
-struct extract_value_impl;
-
-
-template <typename T>
-struct extract_value_impl<T, false>
-{
-    static std::string extract()
-    {
-        std::string s;
-        s += T::value::value;
-        return s;
-    }
-};
-
-
-
-template <typename T>
-struct extract_value_impl<T, true>
-{
-    static std::string extract()
-    {
-        std::string s;
-        using std::to_string;
-        s += to_string(T::length);
-        s += T::value;
-        return s;
-    }
-};
-
-
 template <typename T>
 std::string extract_value()
-{
-    return extract_value_impl<T>::extract();
+{   
+    std::string s;
+    s += T::value::value;
+    return s;
 }
 
 
 template <typename ...Args>
 std::string make_string(metal::list<Args...> metal_list)
-{
-    return (extract_value<Args>() + ...);
+{   
+    return  (extract_value<Args>() + ...);
 }
 
 
