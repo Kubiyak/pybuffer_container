@@ -134,46 +134,6 @@ auto realize_tuple(metal::list<Args...> metal_list)
 }
 
 
-template<typename T, T...>
-struct integer_sequence { };
-
-
-template<std::size_t N, std::size_t... I>
-struct gen_indices : gen_indices<(N - 1), (N - 1), I...> { };
-template<std::size_t... I>
-struct gen_indices<0, I...> : integer_sequence<std::size_t, I...> { };
-
-
-
-std::string& to_string_impl(std::string& s)
-{
-  return s;
-}
-
-
-template <typename... T>
-std::string& to_string_impl(std::string& s, std::string c, T&&... t)
-{
-  s += c;
-  return to_string_impl(s, std::forward<T>(t)...);
-}
-
-template<typename... T, std::size_t... I>
-std::string to_string(const std::tuple<T...>& tup, integer_sequence<std::size_t, I...>)
-{
-  std::string result;
-  int ctx[] = { (to_string_impl(result, std::get<I>(tup)...), 0), 0 };
-  (void)ctx;
-  return result;
-}
-
-template<typename... T>
-std::string to_string(const std::tuple<T...>& tup)
-{
-  return to_string(tup, gen_indices<sizeof...(T)>{});
-}
-
-
 int main()
 {
     auto s1 = boost::pfr::flat_structure_to_tuple(pod_type());
@@ -185,7 +145,11 @@ int main()
 
     // Now the last bit is to turn that tuple into a string
     // https://stackoverflow.com/questions/23436406/converting-tuple-to-string
-    std::cout << to_string(result) << std::endl;
+
+    std::string py_struct_format;
+    std::apply([&py_struct_format](auto&&... args) {(py_struct_format += extract_value(args)), ...);}, result);
+
+    std::cout << py_struct_format << std::endl;
     return 0;
 }
 
