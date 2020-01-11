@@ -148,7 +148,7 @@ int main()
     // https://stackoverflow.com/questions/1198260/how-can-you-iterate-over-the-elements-of-an-stdtuple
     // TODO: Figure out what exactly this is doing.
     std::string py_struct_format;
-    std::apply([&py_struct_format](auto&&... args) {(py_struct_format += extract_value(args)), ...);}, result);
+    std::apply([&py_struct_format](auto&&... args) {(py_struct_format += (args +...));}, result);
 
     std::cout << py_struct_format << std::endl;
     return 0;
