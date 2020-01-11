@@ -14,11 +14,11 @@ struct pod_type
     int i1;
     double d1;
     char c1;
-    size_t sz1[4];
+    size_t sz1[64];
     void * p1;
     float f1;
     short s1;
-    int * ip2[2];
+    int * ip2[24];
 };
 
 
