@@ -19,6 +19,7 @@ struct pod_type
     float f1;
     short s1;
     int * ip2[24];
+    unsigned short foo;
 };
 
 
@@ -32,8 +33,10 @@ metal::map<
     metal::pair<double, metal::number<'d'>>,
     metal::pair<char, metal::number<'c'>>,
     metal::pair<size_t, metal::number<'Q'>>,
+    metal::pair<ssize_t, metal::number<'q'>>,
     metal::pair<float, metal::number<'f'>>,
-    metal::pair<short, metal::number<'h'>>
+    metal::pair<short, metal::number<'h'>>,
+    metal::pair<unsigned short, metal::number<'H'>>
 >, T>;
 
 
@@ -49,7 +52,7 @@ struct tuple_element
 template <typename T>
 struct tuple_element<T*>
 {
-    using value = metal::number<'p'>;   
+    using value = metal::number<'P'>;
 };
 
 
@@ -69,7 +72,7 @@ auto extract_tuple_elements(T<Args...> prototype)
 
 template <typename T>
 std::string extract_value()
-{   
+{
     std::string s;
     s += T::value::value;
     return s;
@@ -78,8 +81,9 @@ std::string extract_value()
 
 template <typename ...Args>
 std::string make_string(metal::list<Args...> metal_list)
-{   
-    return  (extract_value<Args>() + ...);
+{
+    std::string result;
+    return  (result += ... += extract_value<Args>());
 }
 
 
