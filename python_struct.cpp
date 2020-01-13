@@ -153,8 +153,6 @@ std::string get_py_struct_code()
 
     // Use pfr to obtain a tuple containing the types of all the elements in the pod struct
     auto reflection_type_info = boost::pfr::flat_structure_to_tuple(trivially_copyable());
-
-    // Map the c++ type info in s1 into
     using python_type_info = decltype(extract_py_struct_elements(reflection_type_info));
     return make_pystruct_code(python_type_info());
 }
