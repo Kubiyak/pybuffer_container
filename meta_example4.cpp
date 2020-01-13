@@ -7,6 +7,12 @@
 #include <cstdint>
 
 
+// In this example, the type signature of a pod struct type in c++ is converted via metal and pfr metaprogramming
+// into the corresponding type signature which can be used to process the memory layout of this structure in Python.
+// Without metaprogramming, it would be difficult if not impossible to obtain the corresponding struct unpack string
+// for use in Python directly.
+
+
 struct trivially_copyable
 {
     // plain pod type with lots of padding internally to test reflection on
@@ -144,9 +150,13 @@ template <typename StructType>
 std::string get_py_struct_code()
 {
     static_assert(std::is_trivially_copyable<StructType>::value, "StructType must be trivially copyable");
-    auto s1 = boost::pfr::flat_structure_to_tuple(trivially_copyable());
-    using m1 = decltype(extract_py_struct_elements(s1));
-    return make_pystruct_code(m1());
+
+    // Use pfr to obtain a tuple containing the types of all the elements in the pod struct
+    auto reflection_type_info = boost::pfr::flat_structure_to_tuple(trivially_copyable());
+
+    // Map the c++ type info in s1 into
+    using python_type_info = decltype(extract_py_struct_elements(reflection_type_info));
+    return make_pystruct_code(python_type_info());
 }
 
 
