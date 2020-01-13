@@ -15,7 +15,7 @@
 
 struct trivially_copyable
 {
-    // plain pod type with lots of padding internally to test reflection on
+    // plain pod type to test reflection on
     int i1;
     double d1;
     char c1;
