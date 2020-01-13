@@ -48,21 +48,40 @@ metal::map<
 >, T>;
 
 
-template <typename T, size_t count_in>
+template <typename T>
+using size_map = metal::at_key<
+metal::map<
+        metal::pair<metal::number<'c'>, metal::number<1>>,
+        metal::pair<metal::number<'B'>, metal::number<1>>,
+        metal::pair<metal::number<'h'>, metal::number<2>>,
+        metal::pair<metal::number<'H'>, metal::number<2>>,
+        metal::pair<metal::number<'i'>, metal::number<4>>,
+        metal::pair<metal::number<'I'>, metal::number<4>>,
+        metal::pair<metal::number<'q'>, metal::number<8>>,
+        metal::pair<metal::number<'Q'>, metal::number<8>>,
+        metal::pair<metal::number<'f'>, metal::number<4>>,
+        metal::pair<metal::number<'d'>, metal::number<8>>,
+        metal::pair<metal::number<'P'>, metal::number<8>>>, T>;
+
+
+template <typename T, size_t count_in, size_t max_size_in>
 struct py_struct_element
 {
     using type = T;
     using value = struct_code_map<T>;
     static constexpr size_t count = count_in;
+    static constexpr size_t value_size = size_map<value>::value;
+    static constexpr size_t max_size = std::max(max_size_in, value_size);
 };
 
 
-template <typename T, size_t count_in>
-struct py_struct_element<T*, count_in>
+template <typename T, size_t count_in, size_t max_size_in>
+struct py_struct_element<T*, count_in, max_size_in>
 {
     using type = T*;
     using value = metal::number<'P'>;
     static constexpr size_t count = count_in;
+    static constexpr size_t max_size = 8;
 };
 
 
@@ -88,7 +107,7 @@ struct extract_py_struct_element_impl<metal::list<T, Args...>> :public extract_p
 template <typename T>
 struct extract_py_struct_element_impl<metal::list<T>>
 {
-    using result = metal::list<py_struct_element<T, 1>>;
+    using result = metal::list<py_struct_element<T, 1, 0>>;
 };
 
 
@@ -102,14 +121,14 @@ struct extract_py_struct_element_impl< metal::list<>>
 template <typename T, typename N>
 struct pystruct_combine_type<T, N, true>
 {
-    using result = metal::list<py_struct_element<T, N::count + 1>>;
+    using result = metal::list<py_struct_element<T, N::count + 1, 0>>;
 };
 
 
 template <typename T, typename N>
 struct pystruct_combine_type<T, N, false>
 {
-    using result = metal::list<py_struct_element<T, 1>, N>;
+    using result = metal::list<py_struct_element<T, 1, N::max_size>, N>;
 };
 
 
@@ -142,7 +161,16 @@ template <typename ...Args>
 std::string make_pystruct_code(metal::list<Args...> metal_list)
 {
     std::string result;
-    return  (result += ... += extract_value<Args>());
+    (result += ... += extract_value<Args>());
+    if (result.size())
+    {
+        size_t alignment = metal::front<metal::list<Args...>>::max_size;
+        if (alignment > 1)
+        {
+            result += (alignment == 2 ? "0h" : (alignment == 4 ? "0i" : "0P"));
+        }
+    }
+    return result;
 }
 
 
