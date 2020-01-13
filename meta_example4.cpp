@@ -2,7 +2,6 @@
 #include <boost/pfr.hpp>
 #include <iostream>
 #include <utility>
-#include <tuple>
 #include <string>
 #include <type_traits>
 #include <cstdint>
@@ -43,39 +42,92 @@ metal::map<
 >, T>;
 
 
-template <typename T>
+template <typename T, size_t count_in>
 struct py_struct_element
 {
+    using type = T;
     using value = struct_code_map<T>;
+    static constexpr size_t count = count_in;
+};
+
+
+template <typename T, size_t count_in>
+struct py_struct_element<T*, count_in>
+{
+    using type = T*;
+    using value = metal::number<'P'>;
+    static constexpr size_t count = count_in;
+};
+
+
+template <typename Args>
+struct extract_py_struct_element_impl;
+
+
+template <typename T, typename N, bool = std::is_same<T, typename N::type>::value>
+struct pystruct_combine_type;
+
+
+template <typename T, typename ...Args>
+struct extract_py_struct_element_impl<metal::list<T, Args...>> :public extract_py_struct_element_impl<metal::list<Args...>>
+{
+    using list_t = typename extract_py_struct_element_impl<metal::list<Args...>>::result;
+    using front = metal::front<list_t>;
+    using rest = metal::range<list_t, metal::number<1>, metal::size<list_t>>;
+    using combined_elem = typename pystruct_combine_type<T, front>::result;
+    using result = metal::join<combined_elem, rest>;
 };
 
 
 template <typename T>
-struct py_struct_element<T*>
+struct extract_py_struct_element_impl<metal::list<T>>
 {
-    using value = metal::number<'P'>;
+    using result = metal::list<py_struct_element<T, 1>>;
 };
 
 
-template <typename ...Args>
-struct extract_py_struct_element_impl
+template <>
+struct extract_py_struct_element_impl< metal::list<>>
 {
-    using type = metal::transform<metal::lambda<py_struct_element>, metal::list<Args...>>;
+    using result = metal::list<>;
+};
+
+
+template <typename T, typename N>
+struct pystruct_combine_type<T, N, true>
+{
+    using result = metal::list<py_struct_element<T, N::count + 1>>;
+};
+
+
+template <typename T, typename N>
+struct pystruct_combine_type<T, N, false>
+{
+    using result = metal::list<py_struct_element<T, 1>, N>;
 };
 
 
 template <template <typename ...> class T, typename ... Args>
 auto extract_py_struct_elements(T<Args...> prototype)
 {
-    return extract_py_struct_element_impl<Args...>();
+    return typename extract_py_struct_element_impl<metal::list<Args...>>::result();
 }
 
 
 template <typename T>
 std::string extract_value()
 {
+    size_t n = T::count;
     std::string s;
-    s += T::value::value;
+    if (T::count == 1)
+    {
+        s += T::value::value;
+    }
+    else
+    {
+        s += std::to_string(T::count);
+        s += T::value::value;
+    }
     return s;
 }
 
@@ -93,7 +145,7 @@ std::string get_py_struct_code()
 {
     static_assert(std::is_trivially_copyable<StructType>::value, "StructType must be trivially copyable");
     auto s1 = boost::pfr::flat_structure_to_tuple(trivially_copyable());
-    using m1 = decltype(extract_py_struct_elements(s1))::type;
+    using m1 = decltype(extract_py_struct_elements(s1));
     return make_pystruct_code(m1());
 }
 
