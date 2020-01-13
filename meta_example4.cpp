@@ -1,5 +1,5 @@
-#include <metal.hpp>
-#include <boost/pfr.hpp>
+#include <metal.hpp> // https://github.com/brunocodutra/metal
+#include <boost/pfr.hpp> // https://github.com/apolukhin/magic_get
 #include <iostream>
 #include <utility>
 #include <string>
