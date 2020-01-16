@@ -167,8 +167,6 @@ namespace pybuffer_container
             return m_data.data();
         }
 
-    private:
-
         vector_storage():
         m_storage_id(storage_base_t::generate_storage_id())
         {}
@@ -176,6 +174,7 @@ namespace pybuffer_container
         template <typename InputIter>
         vector_storage(InputIter start_pos, InputIter end_pos);
 
+    private:
         static virtual_iter::std_rand_iter_impl<typename std::vector<value_type>::const_iterator, iter_mem_size> _iter_impl;
         std::vector<T> m_data;
         size_t m_storage_id;
@@ -204,7 +203,7 @@ namespace pybuffer_container
     template <typename T>
     typename vector_storage<T>::shared_t vector_storage<T>::create()
     {
-        return vector_storage<T>::create();
+        return std::make_shared<vector_storage<T>>();
     }
 
 
@@ -212,7 +211,7 @@ namespace pybuffer_container
     template <typename InputItr>
     typename vector_storage<T>::shared_t vector_storage<T>::create(InputItr start_pos, InputItr end_pos)
     {
-        return vector_storage<T>::create(start_pos, end_pos);
+        return std::make_shared<vector_storage<T>>(start_pos, end_pos);
     }
 
 

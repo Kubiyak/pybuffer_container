@@ -26,7 +26,7 @@ header_files = ['pybuffer_storage.h', 'pybuffer_container.h']
 
 
 pybuffer_container_env = Environment(CXX="g++-8", CXXFLAGS="--std=c++17 -g", CPPPATH=["."])
-pybuffer_container_test = pybuffer_container_env.Program("pybuffer_container_test", ["pybuffer_container_test.cpp"])
+pybuffer_container_test = pybuffer_container_env.Program("build/pybuffer_container_test/pybuffer_container_test", ["pybuffer_container_test.cpp"])
 pybuffer_container_env.VariantDir("build/pybuffer_container_test", "./")
 Depends('build/pybuffer_container_test/pybuffer_container_test', header_files + ['snapshot_container/', 'metal/', 'magic_get/'])
 pybuffer_container_env.Alias('pybuffer_container_test', pybuffer_container_test)
