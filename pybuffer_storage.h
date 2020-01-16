@@ -42,7 +42,7 @@ namespace pybuffer_container
             // TODO: Refactor out the commonality if possible.
 
         static const size_t npos = 0xFFFFFFFFFFFFFFFF;
-        typedef storage_base<T, 48, virtual_iter::rand_iter<T,48>> storage_base_t;
+        typedef typename snapshot_container::storage_base<T, 48, virtual_iter::rand_iter<T,48>> storage_base_t;
         using storage_base_t::iter_mem_size;
         typedef T value_type;
         typedef std::shared_ptr<vector_storage<T>> shared_t;
@@ -151,10 +151,10 @@ namespace pybuffer_container
             return m_storage_id;
         }
 
-        static shared_base_t create();
+        static shared_t create();
 
         template <typename InputIter>
-        static shared_base_t create(InputIter start_pos, InputIter end_pos);
+        static shared_t create(InputIter start_pos, InputIter end_pos);
 
         // The copy constructors should never be called. All construction is through the storage creator mechanism
         vector_storage(const vector_storage<T>& rhs) = delete;
@@ -202,18 +202,17 @@ namespace pybuffer_container
 
 
     template <typename T>
-    typename vector_storage<T>::shared_base_t vector_storage<T>::create()
+    typename vector_storage<T>::shared_t vector_storage<T>::create()
     {
-        return shared_base_t (new vector_storage<T> ());
+        return vector_storage<T>::create();
     }
 
 
     template <typename T>
     template <typename InputItr>
-    typename vector_storage<T>::shared_base_t vector_storage<T>::create(InputItr start_pos, InputItr end_pos)
+    typename vector_storage<T>::shared_t vector_storage<T>::create(InputItr start_pos, InputItr end_pos)
     {
-        auto storage = new vector_storage<T> (start_pos, end_pos);
-        return shared_base_t (storage);
+        return vector_storage<T>::create(start_pos, end_pos);
     }
 
 
@@ -227,27 +226,51 @@ namespace pybuffer_container
         typedef typename vector_storage<T>::shared_base_t shared_base_t;
         shared_base_t operator() ()
         {
-            return vector_storage<T>::create();
+            return shared_base_t(vector_storage<T>::create());
         }
 
         template <typename IterType>
         shared_base_t operator() (IterType start_pos, IterType end_pos)
         {
-            return vector_storage<T>::create(start_pos, end_pos);
+            return shared_base_t(vector_storage<T>::create(start_pos, end_pos));
         }
     };
 
 
-    // Stateful storage creator with locate capability.
+    template <typename T>
+    struct _pybuffer_storage_control_block
+    {
+        std::mutex m_mutex;
+        std::unordered_map<size_t, std::weak_ptr<vector_storage<T>>> m_map;
+    };
+
+
+    // Stateful storage creator with locate capability. Ideally this would be implemented with
+    // a control block pointed at by std::atomic<std::shared_ptr>. This will need to wait for c++20
     template <typename T>
     struct pybuffer_storage_creator
     {
         typedef typename vector_storage<T>::shared_base_t shared_base_t;
+        typedef typename vector_storage<T>::shared_t shared_t;
+        typedef _pybuffer_storage_control_block<T> control_t;
+
+        pybuffer_storage_creator():
+        m_control(std::make_shared<control_t>())
+        {
+        }
+
+        pybuffer_storage_creator(const pybuffer_storage_creator& other) = default;
+        pybuffer_storage_creator& operator = (const pybuffer_storage_creator& other) = default;
+
+
         shared_base_t operator() ()
         {
             auto storage = vector_storage<T>::create();
-            std::lock_guard<std::mutex> guard(m_mutex);
-            m_map.insert(std::pair<size_t, std::weak_ptr<T>>(storage->id(), std::weak_ptr<T>(storage));
+            auto shared_t_storage = std::static_pointer_cast<vector_storage<T>>(storage);
+            std::lock_guard<std::mutex> guard(m_control->m_mutex);
+            m_control->m_map.insert(std::pair<size_t, std::weak_ptr<vector_storage<T>>>(storage->id(),
+                                    std::weak_ptr<vector_storage<T>>(shared_t_storage)));
+
             return storage;
         }
 
@@ -255,25 +278,26 @@ namespace pybuffer_container
         shared_base_t operator() (IterType start_pos, IterType end_pos)
         {
             auto storage = vector_storage<T>::create(start_pos, end_pos);
-            std::lock_guard<std::mutex> guard(m_mutex);
-            m_map.insert(std::pair<size_t, std::weak_ptr<T>>(storage->id(), std::weak_ptr<T>(storage));
+            auto shared_t_storage = std::static_pointer_cast<vector_storage<T>>(storage);
+            std::lock_guard<std::mutex> guard(m_control->m_mutex);
+            m_control->m_map.insert(std::pair<size_t, std::weak_ptr<vector_storage<T>>>(storage->id(),
+                                    std::weak_ptr<vector_storage<T>>(shared_t_storage)));
             return storage;
         }
 
         // Obtain a shared ptr to the storage identified by id. Returns an empty shared_ptr if not found
-        // or if the ptr has expired.
-        shared_base_t locate(size_t id)
+        // or if the ptr has expired. Note the returned type is shared_t (std::shared_ptr<vector_storage<T>>)
+        shared_t locate(size_t id)
         {
-            std::lock_guard<std::mutex> guard(m_mutex);
-            auto result = m_map.find(id);
-            if (result == m_map.end())
-                return shared_base_t();
+            std::lock_guard<std::mutex> guard(m_control->m_mutex);
+            auto result = m_control->m_map.find(id);
+            if (result == m_control->m_map.end())
+                return shared_t();
             else
                 return result->second.lock();
         }
 
         private:
-            std::mutex m_mutex; // Can be replaced with a lock free map later on as needed
-            std::unordered_map<size_t, std::weak_ptr<T>> m_map;
+            std::shared_ptr<control_t> m_control;
     };
 }

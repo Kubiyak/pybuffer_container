@@ -13,9 +13,20 @@ github_checkout.Command("snapshot_container/.git", None,
 github_checkout.Command("magic_get/.git", None, "git clone https://github.com/apolukhin/magic_get")
 github_checkout.Command("metal/.git", None, "git clone https://github.com/brunocodutra/metal")
 
-
-example_env = Environment(CXX="g++-8", CXXFLAGS="--std=c++17 -g", CPPPATH=["."])
-example = example_env.Program("example", ["python_struct.cpp"])
 Repository("snapshot_container")
 Repository("magic_get/include")
 Repository("metal/include")
+
+
+# example_env = Environment(CXX="g++-8", CXXFLAGS="--std=c++17 -g", CPPPATH=["."])
+# example = example_env.Program("example", ["python_struct.cpp"])
+
+
+header_files = ['pybuffer_storage.h', 'pybuffer_container.h']
+
+
+pybuffer_container_env = Environment(CXX="g++-8", CXXFLAGS="--std=c++17 -g", CPPPATH=["."])
+pybuffer_container_test = pybuffer_container_env.Program("pybuffer_container_test", ["pybuffer_container_test.cpp"])
+pybuffer_container_env.VariantDir("build/pybuffer_container_test", "./")
+Depends('build/pybuffer_container_test/pybuffer_container_test', header_files + ['snapshot_container/', 'metal/', 'magic_get/'])
+pybuffer_container_env.Alias('pybuffer_container_test', pybuffer_container_test)

@@ -25,6 +25,7 @@
 #include <Python.h>
 #include <metal.hpp> // https://github.com/brunocodutra/metal
 #include <boost/pfr.hpp> // https://github.com/apolukhin/magic_get
+#include <Python.h>
 
 
 namespace pybuffer_container_detail
@@ -185,5 +186,17 @@ namespace pybuffer_container_detail
         using python_type_info = decltype(extract_py_struct_elements(reflection_type_info));
         return make_pystruct_code(python_type_info());
     }
+
+
+    // Python interface for a pybuffer_container.
+    template <typename T>
+    struct PyBufferContainerWrapper
+    {
+       PyObject_HEAD
+
+
+       static PyTypeObject pybuffer_container_type;
+    };
+
 }
 
