@@ -25,7 +25,7 @@
 #include <Python.h>
 #include <metal.hpp> // https://github.com/brunocodutra/metal
 #include <boost/pfr.hpp> // https://github.com/apolukhin/magic_get
-#include <Python.h>
+#include "pybuffer_container.h"
 
 
 namespace pybuffer_container_detail
@@ -182,21 +182,101 @@ namespace pybuffer_container_detail
         static_assert(std::is_trivially_copyable<StructType>::value, "StructType must be trivially copyable");
 
         // Use pfr to obtain a tuple containing the types of all the elements in the pod struct
-        auto reflection_type_info = boost::pfr::flat_structure_to_tuple(trivially_copyable());
+        auto reflection_type_info = boost::pfr::flat_structure_to_tuple(StructType());
         using python_type_info = decltype(extract_py_struct_elements(reflection_type_info));
         return make_pystruct_code(python_type_info());
     }
 
 
-    // Python interface for a pybuffer_container.
+    template <typename T>
+    struct PyBufferContainerWrapperImpl
+    {
+        static void tp_dealloc(PyObject * obj);
+        static PyObject * tp_str(PyObject * obj);
+        pybuffer_container::pybuffer_storage_creator<T> m_storage_creator;
+        pybuffer_container::container<T> m_container;
+    };
+
+
+    // Python interface for a pybuffer_container. This type is manipulated inside Python and must be a pod type.
     template <typename T>
     struct PyBufferContainerWrapper
     {
-       PyObject_HEAD
-
-
-       static PyTypeObject pybuffer_container_type;
+       PyObject_HEAD // PyObject ob_base;
+       PyBufferContainerWrapperImpl * m_impl;
     };
 
+
+    template <typename T>
+    PyTypeObject * pybuffer_type_object()
+    {
+        static std::string tp_name = "pybuffer_interface.PyBufferContainerWrapper_" +
+        get_py_struct_code<T>();
+
+        static PyTypeObject tp_object = {
+            PyVarObject_HEAD_INIT(nullptr, 0)
+            tp_name.c_str(),
+            sizeof(PyBufferContainerWrapper), /* tp_basicsize */
+            0, /* tp_itemsize */
+            &PyBufferContainerWrapperImpl<T>::tp_dealloc,
+            0, /* tp_vectorcall_offset: TODOL investigate */
+            0, /* tp_getattr deprecated */
+            0, /* tp_setattr deprecated */
+            0, /* tp_as_async: TODO: Investigate */
+            0, /* tp_repr */
+            0,
+            0, /* tp_as_sequence: TODO: Investigate */
+            0, /* tp_as_mapping */
+            0, /* tp_hash */
+            0, /* tp_call */
+            &PyBufferContainerWrapperImpl<T>::tp_str,
+            0, /* tp_getattro */
+            0, /* tp_setattro */
+            0, /* tp_as_buffer TODO: Set this */
+            0, /* tp_flags TODO: Set correctly */
+            0, /* tp_doc */
+            0, /* tp_traverse (for objects setting Py_TPFLAGS_HAVE_GC) */
+            0, /* tp_clear. This is related to tp_traverse */
+            0, /* tp_richcompare */
+            0, /* tp_weaklist_offset */
+            0, /* tp_iter. TODO: Set */
+            0, /* tp_iternext */
+            0, /* tp_methods */
+            0, /* tp_members */
+            0, /* tp_getset */
+            0, /* tp_base (base type for this type) */
+            0, /* tp_dict. Set by PyType_Ready */
+            0, /* tp_descr_get */
+            0, /* tp_descr_set */
+            0, /* tp_dict_offset */
+            0, /* tp_init: TODO: Investigate object initialization */
+            0, /* tp_alloc: Investigate allocation and initialization */
+            0, /* tp_new: for immutable types, initialization should go here... */
+            0, /* tp_free: TODO: Investigate need for this */
+            0, /* tp_is_gc: Should return 1 for collectible instance and 0 for otherwise */
+            0, /* tp_bases: Only applicable for types created in Python source files */
+            0, /* tp_mro: method resolution order. Only for types defined in Py source files */
+            0, /* tp_cache: Internal use only */
+            0, /* tp_subclasses: Internal use only */
+            0, /* tp_weaklist: Internal use only */
+            0, /* tp_del: deprecated. Use tp_finalize */
+            0, /* tp_version: Internal use only */
+            0, /* tp_finalize: Called before dealloc. TODO: Investigate */
+            // Some other fields are defined conditionally but are not important
+            // for PyBufferContainerWrapper
+        };
+
+        // Note: Caller is responsible for calling PyType_Ready
+        return &tp_object;
+    }
+
+
+
+
+    template <typename T>
+    PyTypeObject PyBufferContainerImpl::py_type_info = {
+
+
+    };
 }
 
