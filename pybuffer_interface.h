@@ -26,6 +26,7 @@
 #include <metal.hpp> // https://github.com/brunocodutra/metal
 #include <boost/pfr.hpp> // https://github.com/apolukhin/magic_get
 #include "pybuffer_container.h"
+#include <vector>
 
 
 namespace pybuffer_container_detail
@@ -177,7 +178,7 @@ namespace pybuffer_container_detail
 
 
     template <typename StructType>
-    std::string get_py_struct_code()
+    std::string _get_py_struct_code_impl()
     {
         static_assert(std::is_trivially_copyable<StructType>::value, "StructType must be trivially copyable");
 
@@ -188,58 +189,206 @@ namespace pybuffer_container_detail
     }
 
 
+    template <typename StructType>
+    std::string get_py_struct_code()
+    {
+        static std::string result = _get_py_struct_code_impl<T>();
+        return result;
+    }
+
+
     template <typename T>
-    struct PyBufferContainerWrapperImpl
+    struct PyBufferViewWrapperImpl
     {
         static void tp_dealloc(PyObject * obj);
         static PyObject * tp_str(PyObject * obj);
-        pybuffer_container::pybuffer_storage_creator<T> m_storage_creator;
-        pybuffer_container::container<T> m_container;
+        // This length is the number of slices in the view
+        static Py_ssize_t sq_length(PyObject * obj);
+        // This returns the slice wrapper at the specified index
+        static PyObject * sq_item(PyObject * obj, Py_ssize_t index);
+        pybuffer_container::container_view<T> m_view;
+        std::vector<pybuffer_container::container_view::shared_storage_t> m_storage_elements;
+
+        PyBufferViewWrapperImpl(const pybuffer_container::container_view<T>& view):
+            m_view(view),
+            m_storage_elements(view->get_storage_elements())
+        {
+        }
     };
 
+
+    template <typename T>
+    struct PyBufferStorageWrapperImpl
+    {
+        static void tp_dealloc(PyObject * object);
+        static PyObject * tp_str(PyObject * object);
+        static int bf_getbuffer(PyObject * exporter, Py_buffer * view, int flags);
+        static void bf_releasebuffer(Py_buffer * view);
+
+        pybuffer_container::container_view::shared_storage_t m_storage; // shared ptr
+        std::string m_format; // py struct code format
+        Py_ssize_t m_shape; // m_storage->size. buffer protocol views need this
+        Py_ssize_t m_strides; // sizeof(T)
+
+        PyBufferStorageWrapperImpl(const pybuffer_container::container_view::shared_storage_t& storage):
+            m_storage(storage),
+            m_format(get_py_struct_code<T>())
+        {
+            m_shape = m_storage->size();
+            m_strides = sizeof(T);
+        }
+    };
+}
+
+
+namespace pybuffer_container
+{
 
     // Python interface for a pybuffer_container. This type is manipulated inside Python and must be a pod type.
     template <typename T>
-    struct PyBufferContainerWrapper
+    struct PyBufferViewWrapper
     {
        PyObject_HEAD // PyObject ob_base;
-       PyBufferContainerWrapperImpl * m_impl;
+       PyBufferViewWrapperImpl<T> * m_impl;
+       // Must be called after python has been initialized.
+       static PyBufferViewWrapper * create_py_view_wrapper(const pybuffer_container::container_view<T>& view);
     };
 
 
     template <typename T>
-    PyTypeObject * pybuffer_type_object()
+    struct PyBufferStorageWrapper
     {
-        static std::string tp_name = "pybuffer_interface.PyBufferContainerWrapper_" +
+        PyObject_HEAD
+        PyBufferStorageWrapperImpl<T> * m_impl;
+        // Note that PyBufferStorageWrapper owns a reference on view_wrapper.
+        static int bf_getbuffer(PyObject* exporter, Py_buffer* view, int flags);
+        static PyBufferStorageWrapper * create_py_storage_wrapper(const PyBufferViewWrapper * view_wrapper, Py_ssize_t index);
+    };
+
+
+    template <typename T>
+    PyTypeObject * pybuffer_view_type()
+    {
+        using namespace pybuffer_container_detail;
+        static std::string tp_name = "pybuffer_interface.PyBufferViewWrapper_" +
         get_py_struct_code<T>();
 
-        static PyTypeObject tp_object = {
+        static std::string doc_string = "Python wrapper for pybuffer_container::container_view with struct signature " +
+        get_py_struct_code<T>();
+
+        static PySequenceMethods sequence_methods = {
+            &PyBufferViewWrapperImpl<T>::sq_length,
+            0, /* concat not supported. TODO: Investigate feasibility */
+            0, /* repeat not supported */
+            &PyBufferViewWrapperImpl<T>::sq_item,
+            0, /* formerly sq_slice. */
+            0, /* assign not allowed */
+            0, /* was assign slice. Not supported */
+            0, /* sq_contains not supported */
+            0, /* in place concat */
+            0 /* in place repeat */
+        };
+
+       static PyTypeObject tp_object = {
             PyVarObject_HEAD_INIT(nullptr, 0)
             tp_name.c_str(),
-            sizeof(PyBufferContainerWrapper), /* tp_basicsize */
+            sizeof(PyBufferViewWrapper), /* tp_basicsize */
             0, /* tp_itemsize */
-            &PyBufferContainerWrapperImpl<T>::tp_dealloc,
+            &PyBufferViewWrapperImpl<T>::tp_dealloc,
             0, /* tp_vectorcall_offset: TODOL investigate */
             0, /* tp_getattr deprecated */
             0, /* tp_setattr deprecated */
             0, /* tp_as_async: TODO: Investigate */
             0, /* tp_repr */
             0,
-            0, /* tp_as_sequence: TODO: Investigate */
+            &sequence_methods, /* tp_as_sequence */
             0, /* tp_as_mapping */
             0, /* tp_hash */
             0, /* tp_call */
-            &PyBufferContainerWrapperImpl<T>::tp_str,
+            &PyBufferViewWrapperImpl<T>::tp_str,
             0, /* tp_getattro */
             0, /* tp_setattro */
             0, /* tp_as_buffer TODO: Set this */
             0, /* tp_flags TODO: Set correctly */
-            0, /* tp_doc */
+            doc_string.c_str(), /* tp_doc */
             0, /* tp_traverse (for objects setting Py_TPFLAGS_HAVE_GC) */
             0, /* tp_clear. This is related to tp_traverse */
             0, /* tp_richcompare */
             0, /* tp_weaklist_offset */
             0, /* tp_iter. TODO: Set */
+            0, /* tp_iternext */
+            0, /* tp_methods */
+            0, /* tp_members */
+            0, /* tp_getset */
+            0, /* tp_base (base type for this type) */
+            0, /* tp_dict. Set by PyType_Ready */
+            0, /* tp_descr_get */
+            0, /* tp_descr_set */
+            0, /* tp_dict_offset */
+            0, /* tp_init: TODO: Investigate object initialization */
+            0, /* tp_alloc: Investigate allocation and initialization */
+            0, /* tp_new */
+            0, /* tp_free: TODO: Investigate need for this */
+            0, /* tp_is_gc: Should return 1 for collectible instance and 0 for otherwise */
+            0, /* tp_bases: Only applicable for types created in Python source files */
+            0, /* tp_mro: method resolution order. Only for types defined in Py source files */
+            0, /* tp_cache: Internal use only */
+            0, /* tp_subclasses: Internal use only */
+            0, /* tp_weaklist: Internal use only */
+            0, /* tp_del: deprecated. Use tp_finalize */
+            0, /* tp_version: Internal use only */
+            0, /* tp_finalize: Called before dealloc. TODO: Investigate */
+            // Some other fields are defined conditionally but are not important
+            // for PyBufferContainerWrapper
+        };
+
+        // Note: Caller is responsible for calling PyType_Ready
+        return &tp_object;
+    }
+
+
+    template <typename T>
+    PyTypeObject * pybuffer_storage_type()
+    {
+        using namespace pybuffer_container_detail;
+        static std::string tp_name = "pybuffer_interface.PyBufferStorageWrapper_" +
+        get_py_struct_code<T>();
+
+        static std::string doc_string = "Python wrapper for pybuffer_container::container_view::shared_storage_t with struct signature " +
+        get_py_struct_code<T>();
+
+        static PyBufferProcs buffer_protocol_methods = {
+          &PyBufferStorageWrapperImpl<T>::bf_getbuffer,
+          &PyBufferStorageWrapperImpl<T>::bf_releasebuffer
+        };
+
+       static PyTypeObject tp_object = {
+            PyVarObject_HEAD_INIT(nullptr, 0)
+            tp_name.c_str(),
+            sizeof(PyBufferViewWrapper), /* tp_basicsize */
+            0, /* tp_itemsize */
+            &PyBufferStorageWrapperImpl<T>::tp_dealloc,
+            0, /* tp_vectorcall_offset: TODOL investigate */
+            0, /* tp_getattr deprecated */
+            0, /* tp_setattr deprecated */
+            0, /* tp_as_async: TODO: Investigate */
+            0, /* tp_repr */
+            0,
+            0, /* tp_as_sequence */
+            0, /* tp_as_mapping */
+            0, /* tp_hash */
+            0, /* tp_call */
+            &PyBufferStorageWrapperImpl<T>::tp_str,
+            0, /* tp_getattro */
+            0, /* tp_setattro */
+            &buffer_protocol_methods, /* buffer protocol */
+            Py_TPFLAGS_DEFAULT, /* tp_flags */
+            doc_string.c_str(), /* tp_doc */
+            0, /* tp_traverse (for objects setting Py_TPFLAGS_HAVE_GC) */
+            0, /* tp_clear. This is related to tp_traverse */
+            0, /* tp_richcompare */
+            0, /* tp_weaklist_offset */
+            0, /* tp_iter.(This type implements the sequence protocol so iter implemented based on that) */
             0, /* tp_iternext */
             0, /* tp_methods */
             0, /* tp_members */
@@ -266,17 +415,12 @@ namespace pybuffer_container_detail
             // for PyBufferContainerWrapper
         };
 
-        // Note: Caller is responsible for calling PyType_Ready
-        return &tp_object;
+       if (!PyType_GetFlags(&tp_object) & Py_TPFLAGS_READY)
+           PyType_Ready(&tp_object);
+       return &tp_object;
     }
-
-
-
-
-    template <typename T>
-    PyTypeObject PyBufferContainerImpl::py_type_info = {
-
-
-    };
 }
+
+
+#include "pybuffer_interface_impl.h"
 
